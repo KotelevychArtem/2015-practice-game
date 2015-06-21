@@ -9,7 +9,9 @@ struct Map
 	void LoadFromFile(const char* name);
 	void Generate(uint mapH, uint mapW);
 	void GenerateEller(uint mapH, uint mapW);
-	void RecursiveGenerate(uint a, uint b, uint c, uint d);
+	void RecursiveGenerate(uint mapH, uint mapW);
+private:
+	void BacktrakingAlg(int i, int j);
 };
 
 void Map::LoadFromFile(const char* name)
@@ -91,35 +93,53 @@ void Map::GenerateEller(uint mapH, uint mapW)
 	}
 }
 
-void Map::RecursiveGenerate(uint a, uint b, uint c, uint d)
+void Map::RecursiveGenerate(uint mapW, uint mapH)
 {
-	if(d - b < 2 || c - a < 2) return;
-	static bool fill = false;
-	if(!fill)
-	{
-		H = c; W = d;
-		if(H&1) ++H;
-		uint tW = W-2;
-		int *t = new int[tW];
-		for(int i(0); i < tW; ++i) t[i] = i+1;
-		Texture = new char* [H];
-		for(int i(0); i < H; ++i)
-			Texture[i] = new char[W];
-		for(int i(0); i < H; ++i)
-			for(int j(0); j < W; ++j)
-				Texture[i][j] = 'W';
-		fill = true;
-		RecursiveGenerate(1, 1, c-1, d-1);
-		return;
-	}
-	std::pair<uint, uint> center;//, centerT, centerR, centerB, centerL;
+	H = mapW; W = mapH;
+	if(!(H&1)) ++H;
+	if(!(W&1)) ++W;
+	Texture = new char* [H];
+	for(int i(0); i < H; ++i)
+		Texture[i] = new char[W];
+	for(int i(0); i < H; ++i)
+		for(int j(0); j < W; ++j)
+			Texture[i][j] = 'W';
 	srand(time(0));
-	center.first = (a+c)>>1;
-	center.second = (b+d)>>1;
-	for(int i(0); i <= center.second>>1; ++i)Texture[center.first][b + rand()%(d-b)] = ' ';
-	for(int i(0); i <= center.first>>1; ++i)Texture[a + rand()%(c-a)][center.second] = ' ';
-	RecursiveGenerate(a, b, center.first, center.second);
-	RecursiveGenerate(a, center.second + 1, center.first, d);
-	RecursiveGenerate(center.first + 1, b, c, center.second);
-	RecursiveGenerate(center.first + 1, center.second + 1, c, d);
+	BacktrakingAlg(1, 1);
+}
+
+void Map::BacktrakingAlg(int i, int j)
+{
+	static const char d[] = {'N', 'S', 'W', 'E'};
+	int dir;
+	int c(0);
+	while(c < 4)
+	{
+		dir = rand()%4;
+		switch(d[dir])
+		{
+		case 'N':
+			if(i - 2 >= 0 )
+				if(Texture[i-2][j] != ' '){ Texture[i-2][j] = rand()&1 ? ' ' : '.'; Texture[i-1][j] = rand()&1 ? ' ' : '.'; BacktrakingAlg(i-2, j); }
+				else ++c;
+			else ++c;
+			break;
+		case 'S':
+			if(i + 2 < H && Texture[i+2][j] != ' '){ Texture[i+2][j] = rand()&1 ? ' ' : '.'; Texture[i+1][j] = rand()&1 ? ' ' : '.'; BacktrakingAlg(i+2, j); }
+			else ++c;
+			break;
+		case 'W':
+			if(j - 2 >= 0)
+				if(Texture[i][j-2] != ' '){ Texture[i][j-2] = rand()&1 ? ' ' : '.'; Texture[i][j-1] = rand()&1 ? ' ' : '.'; BacktrakingAlg(i, j-2); }
+				else ++c;
+			else ++c;
+			break;
+		case 'E':
+			if(j + 2 < W && Texture[i][j+2] != ' '){ Texture[i][j+2] = rand()&1 ? ' ' : '.'; Texture[i][j+1] = rand()&1 ? ' ' : '.'; BacktrakingAlg(i, j+2); }
+			else ++c;
+			break;
+		default:
+			break;
+		}
+	}
 }

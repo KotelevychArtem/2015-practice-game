@@ -38,8 +38,8 @@ public:
 	Server(uint mapSizeW, uint mapSizeH, uint refreshTime, uint botsCount = 0)
 	{
 		RefreshTime = refreshTime;
-		//map.RecursiveGenerate(0, 0, mapSizeH, mapSizeW);
-		map.Generate(mapSizeH, mapSizeW);
+		map.RecursiveGenerate(mapSizeW, mapSizeH);
+		//map.Generate(mapSizeH, mapSizeW);
 		if(botsCount)
 		{
 			botEnable = true;

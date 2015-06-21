@@ -14,7 +14,9 @@ class Game
 	bool isOn;
 	SDL_Window *wnd;
 	SDL_Renderer *ren;
+	uint visionDistance;
 	void DrawWnd();
+	bool isVisible(const Player& other);
 	struct 
 	{
 		SDL_Texture *wall, *grass, *coin, *player, *others;
@@ -27,6 +29,7 @@ public:
 		isOn = false;
 		server = serv;
 		p = server.InitPlayer();
+		visionDistance = 10;
 		otherPlayers = server.GetOtherPlayersFor(p);
 		map = server.GetMap();
 		wnd = SDL_CreateWindow("Game", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, map.W*TILE_SIZE, map.H*TILE_SIZE, SDL_WINDOW_SHOWN);
@@ -107,8 +110,11 @@ void Game::DrawWnd()
 		}
 	for(Player player : otherPlayers)
 	{
-		rect.x = 32*player.X; rect.y = 32*player.Y;
-		SDL_RenderCopy(ren, Textures.others, NULL, &rect);
+		if(isVisible(player))
+		{
+			rect.x = 32*player.X; rect.y = 32*player.Y;
+			SDL_RenderCopy(ren, Textures.others, NULL, &rect);
+		}
 	}
 	rect.x = 32*p.X; rect.y = 32*p.Y;
 	SDL_RenderCopy(ren, Textures.player, NULL, &rect);
@@ -135,5 +141,37 @@ bool Game::tryMove(char dir)
 		case 'E':
 			if(map.Texture[p.Y][p.X+1] != 'W') return true; 
 	}
+	return false;
+}
+
+bool Game::isVisible(const Player& other)
+{
+	if(p.X != other.X && p.Y != other.Y) return false;
+	if(p.X == other.X && std::abs((int)p.Y - (int)other.Y) < visionDistance)
+		if(p.Y > other.Y)
+		{
+			for(int i(other.Y+1); i < p.Y; ++i)
+				if(map.Texture[i][p.X] == 'W') return false;
+			return true;
+		}
+		else
+		{
+			for(int i(p.Y+1); i < other.Y; ++i)
+				if(map.Texture[i][p.X] == 'W') return false;
+			return true;
+		}
+	if(p.Y == other.Y && std::abs((int)p.X - (int)other.X) < visionDistance)
+		if(p.X > other.X)
+		{
+			for(int i(other.X+1); i < p.X; ++i)
+				if(map.Texture[p.Y][i] == 'W') return false;
+			return true;
+		}
+		else
+		{
+			for(int i(p.X+1); i < other.X; ++i)
+				if(map.Texture[p.Y][i] == 'W') return false;
+			return true;
+		}
 	return false;
 }
