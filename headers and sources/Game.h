@@ -1,44 +1,42 @@
+#pragma once
+#include "Graphics.h"
 #include "Server.h"
-#include <SDL.h>
-#include <SDL_image.h>
-#include <SDL_mixer.h>
-
-#define TILE_SIZE 32
+#include <sdkddkver.h>
+#include <WinSock2.h>
 
 class Game
 {
-	Server server;
+	Server *server;
 	Player p;
 	Map map;
 	vector<Player> otherPlayers;
 	bool isOn;
 	SDL_Window *wnd;
 	SDL_Renderer *ren;
+	Graphics *g;
 	uint visionDistance;
 	void DrawWnd();
 	bool isVisible(const Player& other);
-	struct 
-	{
-		SDL_Texture *wall, *grass, *coin, *player, *others;
-	}Textures;
-
 public:
-	Game(Server serv)
+	Game(Server *serv)
 	{
-		if(SDL_Init(SDL_INIT_EVERYTHING) == -1) return;
 		isOn = false;
 		server = serv;
-		p = server.InitPlayer();
+		map = server->GetMap();
+		p = server->InitPlayer();
+		otherPlayers = server->GetOtherPlayersFor(p);
 		visionDistance = 10;
-		otherPlayers = server.GetOtherPlayersFor(p);
-		map = server.GetMap();
-		wnd = SDL_CreateWindow("Game", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, map.W*TILE_SIZE, map.H*TILE_SIZE, SDL_WINDOW_SHOWN);
-		ren = SDL_CreateRenderer(wnd, -1, SDL_RENDERER_ACCELERATED);
-		Textures.grass = IMG_LoadTexture(ren, "grass.bmp");
-		Textures.wall = IMG_LoadTexture(ren, "wall.bmp");
-		Textures.coin = IMG_LoadTexture(ren, "coin.bmp");
-		Textures.player = IMG_LoadTexture(ren, "player.bmp");
-		Textures.others = IMG_LoadTexture(ren, "bot.bmp");
+		g = new Graphics(map.W, map.H);
+		if(!(g->LoadTextures())) return;
+	}
+	void UpdateData()
+	{
+		Response r;
+		r = server->getState(p.getId());
+		map = r.currentMap;
+		p = r.player;
+		p.State = p.State | isOurs;
+		otherPlayers = r.others;
 	}
 	void Start(){ isOn = true; MainLoop(); }
 	void Stop(){ isOn = false; }
@@ -53,72 +51,45 @@ void Game::MainLoop()
 	Response r;
 	while(isOn && mainEvant->type != SDL_QUIT)
 	{
+		UpdateData();
 		SDL_PollEvent(mainEvant);
-		if(mainEvant->type == SDL_KEYDOWN)
+		if(mainEvant->type == SDL_KEYDOWN && !(p.State & isDEAD))
 		{
+			
 			switch(mainEvant->key.keysym.sym)
 			{
 			case SDLK_UP:
-				if(tryMove('N')) server.UpdateMe(p.getId(), 'N');
+				if(tryMove('N')) server->UpdateMe(p.getId(), 'N');
 				break;
 			case SDLK_DOWN:
-				if(tryMove('S')) server.UpdateMe(p.getId(), 'S');
+				if(tryMove('S')) server->UpdateMe(p.getId(), 'S');
 				break;
 			case SDLK_LEFT:
-				if(tryMove('W')) server.UpdateMe(p.getId(), 'W');
+				if(tryMove('W')) server->UpdateMe(p.getId(), 'W');
 				break;
 			case SDLK_RIGHT:
-				if(tryMove('E')) server.UpdateMe(p.getId(), 'E');
+				if(tryMove('E')) server->UpdateMe(p.getId(), 'E');
 			default:
 				break;
 			}
 		}
-		server.UpdateAll();
-		r = server.getState(p.getId());
-		map = r.currentMap;
-		p = r.player;
-		otherPlayers = r.others;
+		//server->UpdateAll();
+		UpdateData();
 		DrawWnd();
-		SDL_Delay(server.getTick());
+		SDL_Delay(80);
 	}
+	server->Stop();
 }
 
 void Game::DrawWnd()
 {
-	SDL_RenderClear(ren);
-	SDL_Rect rect;
-	rect.w = rect.h = 32;
-	for(int i(0); i < map.H; ++i)
-		for(int j(0); j < map.W; ++j)
-		{
-			rect.x = 32*j;
-			rect.y = 32*i;
-			switch(map.Texture[i][j])
-			{
-			case 'W':
-				SDL_RenderCopy(ren, Textures.wall, NULL, &rect);
-				break;
-			case ' ':
-			case '.':
-				SDL_RenderCopy(ren, Textures.grass, NULL, &rect);
-				if(map.Texture[i][j] == '.')
-				{
-					SDL_RenderCopy(ren, Textures.coin, NULL, &rect);
-				}
-				break;
-			}
-		}
-	for(Player player : otherPlayers)
-	{
-		if(isVisible(player))
-		{
-			rect.x = 32*player.X; rect.y = 32*player.Y;
-			SDL_RenderCopy(ren, Textures.others, NULL, &rect);
-		}
-	}
-	rect.x = 32*p.X; rect.y = 32*p.Y;
-	SDL_RenderCopy(ren, Textures.player, NULL, &rect);
-	SDL_RenderPresent(ren);
+	g->Flush();
+	g->DrawMap(map);
+	for(const Player &player : otherPlayers)
+		if(!(player.State & isDEAD))
+			g->DrawPlayer(player);
+	if(!(p.State & isDEAD)) g->DrawPlayer(p);
+	g->Update();
 }
 
 bool Game::tryMove(char dir)

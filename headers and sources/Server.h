@@ -1,3 +1,4 @@
+#pragma once
 #include "Player.h"
 #include <vector>
 #include <map>
@@ -19,10 +20,13 @@ class Server
 	Map map;
 	Players players;
 	uint RefreshTime;
-	void Collision(Player &other);
+	void Collision(uint id);
+	void Collide(uint p1, uint p2);
+	uint FindPlayer(uint x, uint y);
 	pair<uint, uint> FindPlace();
 	vector<pair<uint, int> > bots;
 	bool botEnable;
+	bool started;
 	
 	uint generateId()
 	{
@@ -49,8 +53,9 @@ public:
 	}
 	Player InitPlayer()
 	{
-		pair<uint, uint> cords = FindPlace();
-		Player p(generateId(), cords.first, cords.second, isRUNNER, 0);
+		pair<uint, uint> coords = FindPlace();
+		map.Texture[coords.second][coords.first] = 'p';
+		Player p(generateId(), coords.first, coords.second, isRUNNER, 0);
 		players.insert(std::make_pair(p.getId(), std::make_pair(p, 0)));
 		return p;
 	}
@@ -62,6 +67,9 @@ public:
 	void UpdateMe(uint id, char move);
 	Response getState(uint id);
 	void UpdateAll();
+	void Start(){ started = true; }
+	void Stop(){ started = false; }
+	bool isStarted(){ return started; }
 };
 
 vector<Player> Server::GetOtherPlayersFor(Player p)
@@ -88,51 +96,55 @@ pair<uint, uint> Server::FindPlace()
 
 void Server::Update(uint id)
 {
-	map.Texture[players.at(id).first.Y][players.at(id).first.X] = ' ';
-	switch(players.at(id).second)
+	pair<Player, char> *p = &players[id];
+	if(p->first.State & isDEAD) return;
+	Collision(id);
+	map.Texture[p->first.Y][p->first.X] = ' ';
+	switch(p->second)
 	{
 		case 'n':
 		case 'N':
-			players.at(id).first.Y -= 1; //shoul to check collisions whith others
-			if(map.Texture[players.at(id).first.Y][players.at(id).first.X] == '.')
+			p->first.Y -= 1;
+			if(map.Texture[p->first.Y][p->first.X] == '.')
 			{
-				++players.at(id).first.Score;
-				printf("Players score: %u \n",players.at(id).first.Score);
-				map.Texture[players.at(id).first.Y][players.at(id).first.X] = ' ';
+				++p->first.Score;
+				if(p->first.Score > 20) p->first.State = isPREDATOR;
+				printf("Player %u score: %u \n", id, players.at(id).first.Score);
 			}
 			break;
 		case 's':
 		case 'S':
-			players.at(id).first.Y += 1;
-			if(map.Texture[players.at(id).first.Y][players.at(id).first.X] == '.') 
+			p->first.Y += 1;
+			if(map.Texture[p->first.Y][p->first.X] == '.') 
 			{
-				++players.at(id).first.Score;
-				printf("Players score: %u \n",players.at(id).first.Score);
-				map.Texture[players.at(id).first.Y][players.at(id).first.X] = ' ';
+				++p->first.Score;
+				if(p->first.Score > 20) p->first.State = isPREDATOR;
+				printf("Player %u score: %u \n", id, players.at(id).first.Score);
 			}
 			break;
 		case 'w':
 		case 'W':
-			players.at(id).first.X -= 1;
-			if(map.Texture[players.at(id).first.Y][players.at(id).first.X] == '.')
+			p->first.X -= 1;
+			if(map.Texture[p->first.Y][p->first.X] == '.')
 			{
-				++players.at(id).first.Score;
-				printf("Players score: %u \n",players.at(id).first.Score);
-				map.Texture[players.at(id).first.Y][players.at(id).first.X] = ' ';
+				++p->first.Score;
+				if(p->first.Score > 20) p->first.State = isPREDATOR;
+				printf("Player %u score: %u \n", id, players.at(id).first.Score);
 			}
 			break;
 		case 'e':
 		case 'E':
 			players.at(id).first.X += 1;
-			if(map.Texture[players.at(id).first.Y][players.at(id).first.X] == '.')
+			if(map.Texture[p->first.Y][p->first.X] == '.')
 			{
-				++players.at(id).first.Score;
-				printf("Players score: %u \n",players.at(id).first.Score);
-				map.Texture[players.at(id).first.Y][players.at(id).first.X] = ' ';
+				++p->first.Score;
+				if(p->first.Score > 20) p->first.State = isPREDATOR;
+				printf("Player %u score: %u \n", id, players.at(id).first.Score);
 			}
 		default:
-			return;
+			break;
 	}
+	map.Texture[p->first.Y][p->first.X] = 'p';
 	/*Response r(map, players.at(id).first, GetOtherPlayersFor(players.at(id).first));
 	return r;*/
 }
@@ -143,11 +155,16 @@ void Server::moveBots()
 	for(pair<uint, int> &bot : bots)
 	{
 		int d = bot.second;
+		Player findedBot = players.at(bot.first).first;
+		if(map.Texture[findedBot.Y - 1][findedBot.X] == '.'){ d = 0; goto skipRand; }
+		else if(map.Texture[findedBot.Y][findedBot.X + 1] == '.'){ d = 1; goto skipRand; }
+		else if(map.Texture[findedBot.Y + 1][findedBot.X] == '.'){ d = 2; goto skipRand; }
+		else if(map.Texture[findedBot.Y][findedBot.X - 1] == '.'){ d = 3; goto skipRand; }
 		if(d > 3) d = 0;
 		else if(d < 0) d = 3;
-		int ran = rand()%200;
+		int ran = rand()%35;
 		if(ran < 4) d = ran;
-		Player findedBot = players.at(bot.first).first;
+	skipRand:
 		switch(t[d])
 		{
 			case 'n':
@@ -193,4 +210,60 @@ void Server::UpdateAll()
 		Update(player.first);
 		players.at(player.second.first.getId()).second = 0;
 	}
+}
+
+void Server::Collision(uint id)
+{
+	uint id2;
+	pair<Player, char> *p = &players[id];
+	switch(p->second)
+	{
+	case 'n':
+	case 'N':
+		if(map.Texture[p->first.Y - 1][p->first.X] == 'p') { id2 = FindPlayer(p->first.X, p->first.Y - 1); if(players[id2].second == 'S' || players[id2].second == 0){ Collide(id, id2); return; } }
+		else if(p->first.Y - 2 > 0 && map.Texture[p->first.Y - 2][p->first.X] == 'p'){id2 = FindPlayer(p->first.X, p->first.Y - 2); if(players[id2].second == 'S'){ Collide(id, id2); return; } }
+		else if(map.Texture[p->first.Y - 1][p->first.X - 1] == 'p'){id2 = FindPlayer(p->first.X - 1, p->first.Y - 1); if(players[id2].second == 'E'){ Collide(id, id2); return; } }
+		else if(map.Texture[p->first.Y - 1][p->first.X + 1] == 'p'){id2 = FindPlayer(p->first.X + 1, p->first.Y - 1); if(players[id2].second == 'W'){ Collide(id, id2); return; } }
+		break;
+	case 's':
+	case 'S':
+		if(map.Texture[p->first.Y + 1][p->first.X] == 'p'){ id2 = FindPlayer(p->first.X, p->first.Y + 1); if(players[id2].second == 'N' || players[id2].second == 0){ Collide(id, id2); return; } }
+		else if(p->first.Y + 2 < map.H && map.Texture[p->first.Y + 2][p->first.X] == 'p'){id2 = FindPlayer(p->first.X, p->first.Y + 2); if(players[id2].second == 'N'){ Collide(id, id2); return; } }
+		else if( map.Texture[p->first.Y + 1][p->first.X - 1] == 'p'){id2 = FindPlayer(p->first.X - 1, p->first.Y + 1); if(players[id2].second == 'E'){ Collide(id, id2); return; } }
+		else if(map.Texture[p->first.Y + 1][p->first.X + 1] == 'p'){id2 = FindPlayer(p->first.X + 1, p->first.Y + 1); if(players[id2].second == 'W'){ Collide(id, id2); return; } }
+		break;
+	case 'w':
+	case 'W':
+		if(map.Texture[p->first.Y][p->first.X - 1] == 'p'){ id2 = FindPlayer(p->first.X - 1, p->first.Y); if(players[id2].second == 'E' || players[id2].second == 0){ Collide(id, id2); return; } }
+		else if(p->first.X - 2 > 0 && map.Texture[p->first.Y][p->first.X - 2] == 'p'){id2 = FindPlayer(p->first.X - 2, p->first.Y); if(players[id2].second == 'E'){ Collide(id, id2); return; } }
+		else if(map.Texture[p->first.Y + 1][p->first.X - 1] == 'p'){id2 = FindPlayer(p->first.X - 1, p->first.Y + 1); if(players[id2].second == 'N'){ Collide(id, id2); return; } }
+		else if(map.Texture[p->first.Y - 1][p->first.X - 1] == 'p'){id2 = FindPlayer(p->first.X - 1, p->first.Y - 1); if(players[id2].second == 'S'){ Collide(id, id2); return; } }
+		break;
+	case 'e':
+	case 'E':
+		if(map.Texture[p->first.Y][p->first.X + 1] == 'p'){ id2 = FindPlayer(p->first.X + 1, p->first.Y); if(players[id2].second == 'W' || players[id2].second == 0){ Collide(id, id2); return; } }
+		else if(p->first.X + 2 < map.W && map.Texture[p->first.Y][p->first.X + 2] == 'p'){id2 = FindPlayer(p->first.X + 2, p->first.Y); if(players[id2].second == 'W'){ Collide(id, id2); return; } }
+		else if(map.Texture[p->first.Y + 1][p->first.X + 1] == 'p'){id2 = FindPlayer(p->first.X + 1, p->first.Y + 1); if(players[id2].second == 'N'){ Collide(id, id2); return; } }
+		else if(map.Texture[p->first.Y - 1][p->first.X + 1] == 'p'){id2 = FindPlayer(p->first.X + 1, p->first.Y - 1); if(players[id2].second == 'S'){ Collide(id, id2); return; } }
+		break;
+	default:
+		break;
+	}
+}
+
+uint Server::FindPlayer(uint x, uint y)
+{
+	for(pair<uint, pair<Player, char> > t : players)
+		if(t.second.first.X == x && t.second.first.Y == y) return t.first;
+	return 0;
+}
+
+void Server::Collide(uint id1, uint id2)
+{
+	if(!(id1 && id2)) return;
+	Player *p1 = &players[id1].first, *p2 = &players[id2].first;
+	char res = p1->State | p2->State;
+	if(!((p1->State | p2->State) & isPREDATOR)) return;
+	if(p1->State & p2->State & isPREDATOR){ p1->Score > p2->Score ? p2->State = isDEAD : p1->State = isDEAD; return; }
+	p1->State & isPREDATOR ? p2->State = isDEAD : p1->State = isDEAD;
 }
